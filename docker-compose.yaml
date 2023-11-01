@@ -1,0 +1,44 @@
+services:
+  elasticsearch:
+    # image: docker.elastic.co/elasticsearch/elasticsearch:8.5.0
+    build:
+      context: .
+      dockerfile: DockerfileElastic
+    environment:
+      - node.name=textminer-node
+      - discovery.type=single-node
+      - cluster.name=textminer-es-data-cluster
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+      - logger.org.elasticsearch.discovery=ERROR
+      - logger.org.elasticsearch.transport=ERROR
+      - logger.org.elasticsearch.http=ERROR
+      - ELASTIC_PASSWORD=$ELASTIC_ROOT_PASSWORD
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es:/usr/share/elasticsearch/data
+    healthcheck:
+      test: curl -s localhost:9200 >/dev/null || exit 1
+      interval: 5s
+      timeout: 3s
+      retries: 5
+  backend:
+    build:
+      context: .
+    volumes:
+      - type: bind
+        source: ./code
+        target: /code
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      ES_HOST: $ES_HOST
+    command: bash -c "cd code && pytest"
+
+volumes:
+  es:
