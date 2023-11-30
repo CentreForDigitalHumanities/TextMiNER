@@ -7,3 +7,5 @@ WORKDIR /backend
 COPY requirements.in /backend/
 RUN pip-compile
 RUN pip install -r requirements.txt
+
+RUN python -m spacy download en_core_web_sm

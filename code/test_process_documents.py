@@ -41,5 +41,11 @@ def test_search_annotated_text(mock_es_client):
     )
     assert search_response['hits']['total']['value'] == 1
 
+def test_add_annotated_field(mock_es_client):
+    add_annotated_field(mock_es_client, settings.TEST_INDEX, settings.TEST_FIELD_NAME)
+    mapping = mock_es_client.indices.get_mapping(index=settings.TEST_INDEX)[settings.TEST_INDEX]['mappings']
+    assert settings.TEST_FIELD_NAME in mapping['properties']
+    add_annotated_field(mock_es_client, settings.TEST_INDEX, settings.TEST_FIELD_NAME)
+
 def annotated_field_name():
     return '{}_ner'.format(settings.TEST_FIELD_NAME)
