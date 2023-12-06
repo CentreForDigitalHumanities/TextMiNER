@@ -19,15 +19,15 @@ def process_documents(index, field_name, language):
     model  = spacy_models.get(language)
     nlp = spacy.load(model)
     for doc in documents:
-        output = ''
+        output = []
         parsed = nlp(doc['_source'][field_name])
         for token in parsed:
             if token.ent_type_:
-                output += '[{}]({})'.format(token.text, token.ent_type_)
+                output.append('[{}]({})'.format(token.text, token.ent_type_))
             else:
-                output += token.text
+                output.append(token.text)
         es.update(index=index, id=doc['_id'], doc={
-            annotated_field_name(field_name): output
+            annotated_field_name(field_name): ' '.join(output)
         })
 
 
@@ -45,7 +45,7 @@ def add_annotated_field(es_client, index_name, field_name):
                 }
         )
     except BadRequestError:
-        pass
+        raise
 
-    
-
+if __name__ == '__main__':
+    process_documents()
