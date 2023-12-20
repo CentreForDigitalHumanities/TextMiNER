@@ -5,7 +5,8 @@ import spacy
 from es_client import es_client
 
 spacy_models = {
-    'english': "en_core_web_sm"
+    'english': "en_core_web_sm",
+    'dutch': "nl_core_news_sm",
 }
 
 @click.command()
