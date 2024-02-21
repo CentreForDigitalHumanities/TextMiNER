@@ -1,12 +1,13 @@
 import click
 from elasticsearch import BadRequestError
-import spacy
+from flair.splitter import SegtokSentenceSplitter
+from flair.models import SequenceTagger
 
 from es_client import es_client
 
-spacy_models = {
-    'english': "en_core_web_sm",
-    'dutch': "nl_core_news_sm",
+ner_models = {
+    'english': "flair/ner",
+    'dutch': "flair/ner-dutch",
 }
 
 @click.command()
@@ -17,23 +18,45 @@ def process_documents(index, field_name, language):
     es = es_client()
     add_annotated_field(es, index, field_name)
     documents = es.search(index=index)['hits']['hits']
-    model  = spacy_models.get(language)
-    nlp = spacy.load(model)
+    model = ner_models.get(language)
+    tagger = SequenceTagger.load(model)
     for doc in documents:
-        output = []
-        parsed = nlp(doc['_source'][field_name])
-        for token in parsed:
-            if token.ent_type_:
-                output.append('[{}]({})'.format(token.text, token.ent_type_))
-            else:
-                output.append(token.text)
+        output = ''
+        document = doc['_source'][field_name]
+        splitter = SegtokSentenceSplitter()
+        sentences = splitter(document)
+        for sentence in sentences:
+            tagger.predict(sentence)
+            predicted = sentence.to_dict()
+            for token in predicted['tokens']:
+                # tokens have start_pos and end_pos, and so have entitites
+                # entities may span multiple tokens
+                label = next(
+                    (ent for ent in predicted['labels'] if ent['end_pos'] > token['start_pos'] >= token['start_pos']), None)
+                if label:
+                    output += add_opening_tag(token)
+                    if token['end_pos'] == label['end_pos']:
+                        output += add_closing_tag(label)
+                    else:
+                        continue
+                else:
+                    output += token['text']
         es.update(index=index, id=doc['_id'], doc={
-            annotated_field_name(field_name): ' '.join(output)
+            annotated_field_name(field_name): output
         })
+
+
+def add_opening_tag(token):
+    return '[' + token['text']
+
+
+def add_closing_tag(label):
+    return '](' + label['value'] + ')'
 
 
 def annotated_field_name(field_name):
     return '{}_ner'.format(field_name)
+
 
 def add_annotated_field(es_client, index_name, field_name):
     try:
@@ -47,6 +70,7 @@ def add_annotated_field(es_client, index_name, field_name):
         )
     except BadRequestError:
         raise
+
 
 if __name__ == '__main__':
     process_documents()

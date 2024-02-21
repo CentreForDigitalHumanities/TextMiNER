@@ -1,4 +1,5 @@
 click
 elasticsearch
+flair
 pytest
 spacy
