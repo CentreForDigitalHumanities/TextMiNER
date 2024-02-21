@@ -24,7 +24,7 @@ def process_documents(index, field_name, language):
         output = ''
         document = doc['_source'][field_name]
         splitter = SegtokSentenceSplitter()
-        sentences = splitter(document)
+        sentences = splitter.split(document)
         for sentence in sentences:
             tagger.predict(sentence)
             predicted = sentence.to_dict()
