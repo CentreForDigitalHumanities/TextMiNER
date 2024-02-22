@@ -25,6 +25,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    ports:
+      - 127.0.0.1:9200:9200
   backend:
     build:
       context: .
@@ -48,3 +50,4 @@ services:
 
 volumes:
   es:
+    name: $ES_EXTERNAL_VOLUME
