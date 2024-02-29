@@ -42,7 +42,7 @@ ner_models = {
 def process_documents(index, field_name, language):
     es = es_client()
     add_annotated_field(es, index, field_name)
-    documents = es.search(index=index)['hits']['hits']
+    documents = es.search(index=index, size=1000)['hits']['hits']
     tagger = ner_models.get(language)
     for doc in documents:
         output = ''
