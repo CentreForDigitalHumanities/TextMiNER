@@ -1,53 +1,17 @@
 services:
-  elasticsearch:
-    build:
-      context: .
-      dockerfile: DockerfileElastic
-    environment:
-      - node.name=textminer-node
-      - discovery.type=single-node
-      - cluster.name=textminer-es-data-cluster
-      - bootstrap.memory_lock=true
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
-      - logger.org.elasticsearch.discovery=ERROR
-      - logger.org.elasticsearch.transport=ERROR
-      - logger.org.elasticsearch.http=ERROR
-      - ELASTIC_PASSWORD=$ELASTIC_ROOT_PASSWORD
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-    volumes:
-      - es:/usr/share/elasticsearch/data
-    healthcheck:
-      test: curl -s localhost:9200 >/dev/null || exit 1
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    ports:
-      - 127.0.0.1:9200:9200
   backend:
     build:
       context: .
+    networks:
+      - ianalyzer-network
     volumes:
       - type: bind
         source: ./code
         target: /backend/code
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
     environment:
       ES_HOST: $ES_HOST
-  kibana:
-    image: docker.elastic.co/kibana/kibana:8.5.0
-    depends_on:
-      - elasticsearch
-    environment:
-        - "ELASTICSEARCH_URL=http://elasticsearch:9200"
-    ports:
-      - 127.0.0.1:5601:5601
 
-volumes:
-  es:
-    name: $ES_EXTERNAL_VOLUME
+networks:
+  ianalyzer-network:
+    name: $NETWORK
+    external: true
