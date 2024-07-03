@@ -8,6 +8,9 @@ services:
       - type: bind
         source: ./code
         target: /backend/code
+      - type: bind
+        source: $DATA_DIR
+        target: /backend/data
     environment:
       ES_HOST: $ES_HOST
 
