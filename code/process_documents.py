@@ -5,7 +5,7 @@ import pickle
 import string
 
 from elasticsearch import BadRequestError
-from flair.splitter import SegtokSentenceSplitter
+from flair.splitter import NoSentenceSplitter
 from flair.models import SequenceTagger
 from flair.embeddings import TransformerWordEmbeddings
 from torch import nn
@@ -67,7 +67,7 @@ def annotate_entities(documents, field_name, tagger, es_client, index):
         output = ''
         entities = []
         document = doc['_source'][field_name]
-        splitter = SegtokSentenceSplitter()
+        splitter = NoSentenceSplitter()
         sentences = splitter.split(document)
         for sentence in sentences:
             try:
