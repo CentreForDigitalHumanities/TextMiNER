@@ -20,16 +20,10 @@ ELASTIC_ROOT_PASSWORD={password-of-your-choice}
 ### Environment
 Before running the script, define your environment variables to set correct values for `ES_HOST` if you don't run Elasticsearch on localhost, and `API_ID`, `API_KEY` and `CERTS_LOCATION`, if you access an Elasticsearch cluster using an API key.
 
-### SpaCy models
-Make sure you have the required SpaCy models for NER analysis by running
-```
-python -m spacy download en_core_web_sm
-python -m spacy download nl_core_news_sm
-```
 
 ### Run the script (without Docker)
 To analyze data from an Elasticsearch index with SpaCy, and save this data back into an annotated field, change to the `code` directory (`cd code`) and then run the following command:
-`python process_documents.py -i {index_name} -f {field_name} -l {language}`
+`python process_documents.py -i {index_name} -f {field_name} -l {language_code} -o {output_dir}`
 
 To run this for an English language corpus indexed as "test", which has text data saved in field "content", you could run
 `python process_documents.py -i test -f content -l english`

@@ -15,8 +15,6 @@ from es_client import es_client
 
 logger = logging.getLogger(__name__)
 
-SOURCE_DATA_DIR = './data'
-
 
 def dutch_tagger():
     ''' The Dutch tokenizer was retrained after the Dutch NER model
@@ -42,8 +40,9 @@ ner_models = {
 @click.command()
 @click.option('-i', '--index', help="Elasticsearch index name from which to request the training data", required=True)
 @click.option('-f', '--field_name', help="The index field to process", default='text')
-@click.option('-l', '--language', help='the language code of the field', default='en')
-def process_documents(index, field_name, language):
+@click.option('-l', '--language_code', help='the language code of the field', default='en')
+@click.option('-o', '--output_dir', help="The directory to which to write the data of discovered entities", default='data')
+def process_documents(index, field_name, language_code, output_dir):
     es = es_client()
     add_annotated_field(es, index, field_name)
     add_filter_fields(es, index)
@@ -54,26 +53,26 @@ def process_documents(index, field_name, language):
     n_documents = len(documents)
     scroll_id = initial_search['_scroll_id']
     total_hits = initial_search['hits']['total']['value']
-    tagger = ner_models.get(language)
-    annotate_entities(documents, field_name, tagger, es, index, language)
+    tagger = ner_models.get(language_code)
+    annotate_entities(documents, field_name, tagger, es, index, language_code, output_dir)
     while n_documents < total_hits:
         documents = es.scroll(scroll_id=scroll_id, scroll='60m')[
             'hits']['hits']
-        annotate_entities(documents, field_name, tagger, es, index, language)
+        annotate_entities(documents, field_name, tagger, es, index, language_code, output_dir)
 
 
-def annotate_entities(documents, field_name, tagger, es_client, index, language):
+def annotate_entities(documents, field_name, tagger, es_client, index, language_code, output_dir):
     for doc in documents:
         output = ''
         entities = []
-        document = Sentence(doc['_source'][field_name], use_tokenizer=False, language_code=language)
+        document = Sentence(doc['_source'][field_name], use_tokenizer=False, language_code=language_code)
         try:
             tagger.predict(document)
             output = parse_prediction(document, output, entities)
         except:
             logger.warning(
                 'Failed to parse document with following id: {}'.format(doc['_id']))
-        save_entity_labels(entities, index, doc['_id'])
+        save_entity_labels(entities, index, doc['_id'], output_dir)
         es_client.update(index=index, id=doc['_id'], doc={
             annotated_field_name(field_name): output,
             **create_filter_content(entities)
@@ -102,17 +101,19 @@ def parse_prediction(sentence, output, entities):
 
 
 def create_filter_content(entities) -> dict:
-    document_fields = {}
+    document_fields = {key: [] for key in filter_field_mappings().values()}
     for ent in entities:
         for field in filter_field_mappings().keys():
             if field in [label['value'] for label in ent['labels']]:
-                document_fields.update(
-                    {filter_field_mappings()[field]: ent['text']})
+                field_name = filter_field_mappings()[field]
+                value = document_fields[field_name]
+                value.append(ent['text'])
+                document_fields.update({field_name: value})
     return document_fields
 
 
-def save_entity_labels(entities, index_name, identifier):
-    with open(join(SOURCE_DATA_DIR, f'{index_name}.pkl'), 'rb') as f:
+def save_entity_labels(entities, index_name, identifier, output_dir):
+    with open(join(output_dir, f'{index_name}.pkl'), 'wb+') as f:
         pickle.dump({identifier: entities}, f)
 
 
