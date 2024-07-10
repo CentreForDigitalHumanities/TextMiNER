@@ -5,7 +5,7 @@ import pickle
 import string
 
 from elasticsearch import BadRequestError
-from flair.splitter import NoSentenceSplitter
+from flair.data import Sentence
 from flair.models import SequenceTagger
 from flair.embeddings import TransformerWordEmbeddings
 from torch import nn
@@ -66,19 +66,16 @@ def annotate_entities(documents, field_name, tagger, es_client, index):
     for doc in documents:
         output = ''
         entities = []
-        document = doc['_source'][field_name]
-        splitter = NoSentenceSplitter()
-        sentences = splitter.split(document)
-        for sentence in sentences:
-            try:
-                tagger.predict(sentence)
-                output = parse_prediction(sentence, output, entities) + ' '
-            except:
-                logger.warning(
-                    'Failed to parse the following sentence: {}'.format(sentence))
+        document = Sentence(doc['_source'][field_name])
+        try:
+            tagger.predict(document)
+            output = parse_prediction(document, output, entities)
+        except:
+            logger.warning(
+                'Failed to parse document with following id: {}'.format(doc['_id']))
         save_entity_labels(entities, index, doc['_id'])
         es_client.update(index=index, id=doc['_id'], doc={
-            annotated_field_name(field_name): output[:-1],
+            annotated_field_name(field_name): output,
             **create_filter_content(entities)
         })
 
