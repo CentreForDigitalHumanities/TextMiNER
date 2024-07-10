@@ -35,14 +35,14 @@ def dutch_tagger():
     return tagger
 
 ner_models = {
-    'english': SequenceTagger.load("flair/ner-english"),
-    'dutch': dutch_tagger(),
+    'en': SequenceTagger.load("flair/ner-english"),
+    'nl': dutch_tagger(),
 }
 
 @click.command()
 @click.option('-i', '--index', help="Elasticsearch index name from which to request the training data", required=True)
 @click.option('-f', '--field_name', help="The index field to process", default='text')
-@click.option('-l', '--language', help='the language of the field', default='english')
+@click.option('-l', '--language', help='the language code of the field', default='en')
 def process_documents(index, field_name, language):
     es = es_client()
     add_annotated_field(es, index, field_name)
@@ -59,14 +59,14 @@ def process_documents(index, field_name, language):
     while n_documents < total_hits:
         documents = es.scroll(scroll_id=scroll_id, scroll='60m')[
             'hits']['hits']
-        annotate_entities(documents, field_name, tagger, es, index)
+        annotate_entities(documents, field_name, tagger, es, index, language)
 
 
-def annotate_entities(documents, field_name, tagger, es_client, index):
+def annotate_entities(documents, field_name, tagger, es_client, index, language):
     for doc in documents:
         output = ''
         entities = []
-        document = Sentence(doc['_source'][field_name])
+        document = Sentence(doc['_source'][field_name], use_tokenizer=False, language_code=language)
         try:
             tagger.predict(document)
             output = parse_prediction(document, output, entities)
