@@ -55,7 +55,7 @@ def process_documents(index, field_name, language):
     scroll_id = initial_search['_scroll_id']
     total_hits = initial_search['hits']['total']['value']
     tagger = ner_models.get(language)
-    annotate_entities(documents, field_name, tagger, es, index)
+    annotate_entities(documents, field_name, tagger, es, index, language)
     while n_documents < total_hits:
         documents = es.scroll(scroll_id=scroll_id, scroll='60m')[
             'hits']['hits']
