@@ -2,6 +2,7 @@ import click
 import logging
 from os.path import join
 import pickle
+import re
 import string
 
 from elasticsearch import BadRequestError
@@ -14,6 +15,7 @@ import torch
 from es_client import es_client
 
 logger = logging.getLogger(__name__)
+pattern = re.compile(r'\W')
 
 
 def dutch_tagger():
@@ -107,8 +109,12 @@ def create_filter_content(entities) -> dict:
             if field in [label['value'] for label in ent['labels']]:
                 field_name = filter_field_mappings()[field]
                 value = document_fields[field_name]
-                value.append(ent['text'])
+                # add value to keyword field, stripping non-alphanumeric characters
+                value.append(pattern.sub('', ent['text']))
                 document_fields.update({field_name: value})
+    for field in document_fields.keys():
+        # deduplicate keywords
+        document_fields[field] = list(set(document_fields[field]))
     return document_fields
 
 
