@@ -8,10 +8,15 @@ services:
       - type: bind
         source: ./code
         target: /backend/code
+      - flair-models:/usr
     environment:
       ES_HOST: $ES_HOST
+      FLAIR_CACHE_ROOT: '/usr'
 
 networks:
   ianalyzer-network:
     name: $NETWORK
     external: true
+
+volumes:
+  flair-models:
