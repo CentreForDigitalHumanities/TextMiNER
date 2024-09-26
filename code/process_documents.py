@@ -60,7 +60,10 @@ def process_documents(index, field_name, language_code, output_dir):
     while n_documents < total_hits:
         documents = es.scroll(scroll_id=scroll_id, scroll='60m')[
             'hits']['hits']
+        scroll_id = documents["_scroll_id"]
+        n_documents += len(documents)
         annotate_entities(documents, field_name, tagger, es, index, language_code, output_dir)
+    es.clear_scroll(scroll_id="_all")
 
 
 def annotate_entities(documents, field_name, tagger, es_client, index, language_code, output_dir):
