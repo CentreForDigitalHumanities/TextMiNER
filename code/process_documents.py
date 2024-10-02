@@ -48,7 +48,9 @@ def process_documents(index, field_name, language_code, output_dir):
     es = es_client()
     add_annotated_field(es, index, field_name)
     add_filter_fields(es, index)
-    initial_search = es.search(index=index, size=1000, scroll='1m')
+    initial_search = es.search(
+        index=index, size=100, scroll="30m", track_total_hits=True
+    )
     if not initial_search:
         es.clear_scroll(scroll_id='_all')
     documents = initial_search['hits']['hits']
@@ -58,9 +60,9 @@ def process_documents(index, field_name, language_code, output_dir):
     tagger = ner_models.get(language_code)
     annotate_entities(documents, field_name, tagger, es, index, language_code, output_dir)
     while n_documents < total_hits:
-        documents = es.scroll(scroll_id=scroll_id, scroll='60m')[
-            'hits']['hits']
-        scroll_id = documents["_scroll_id"]
+        next_batch = es.scroll(scroll_id=scroll_id, size=100, scroll="30m")
+        documents = next_batch["hits"]["hits"]
+        scroll_id = next_batch["_scroll_id"]
         n_documents += len(documents)
         annotate_entities(documents, field_name, tagger, es, index, language_code, output_dir)
     es.clear_scroll(scroll_id="_all")
