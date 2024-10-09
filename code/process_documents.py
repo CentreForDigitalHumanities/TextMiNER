@@ -60,7 +60,7 @@ def process_documents(index, field_name, language_code, output_dir):
     tagger = ner_models.get(language_code)
     annotate_entities(documents, field_name, tagger, es, index, language_code, output_dir)
     while n_documents < total_hits:
-        next_batch = es.scroll(scroll_id=scroll_id, size=100, scroll="30m")
+        next_batch = es.scroll(scroll_id=scroll_id, scroll="30m")
         documents = next_batch["hits"]["hits"]
         scroll_id = next_batch["_scroll_id"]
         n_documents += len(documents)
