@@ -5,7 +5,7 @@ import pickle
 import re
 import string
 
-from elasticsearch import BadRequestError
+from elasticsearch import Elasticsearch, BadRequestError
 from flair.data import Sentence
 from flair.models import SequenceTagger
 from flair.embeddings import TransformerWordEmbeddings
@@ -52,10 +52,15 @@ ner_models = {
 @click.option('-o', '--output_dir', help="The directory to which to write the data of discovered entities", default='data')
 def process_documents(index, field_name, language_code, output_dir):
     es = es_client()
-    add_annotated_field(es, index, field_name)
-    add_filter_fields(es, index)
+    if not (_mapping_has_ner_fields(es, index)):
+        add_annotated_field(es, index, field_name)
+        add_filter_fields(es, index)
     initial_search = es.search(
-        index=index, size=100, scroll="30m", track_total_hits=True
+        index=index,
+        query=_exclude_processed_docs_query(),
+        size=100,
+        scroll="30m",
+        track_total_hits=True,
     )
     if not initial_search:
         es.clear_scroll(scroll_id='_all')
@@ -72,6 +77,27 @@ def process_documents(index, field_name, language_code, output_dir):
         n_documents += len(documents)
         annotate_entities(documents, field_name, tagger, es, index, language_code, output_dir)
     es.clear_scroll(scroll_id="_all")
+
+
+def _mapping_has_ner_fields(es_client: Elasticsearch, index: str) -> bool:
+    mapping = es_client.indices.get_mapping(index=index)
+    fields = mapping[index]['mappings']['properties']
+    return any(f.endswith(":ner") for f in fields.keys()) and any(
+        f.endswith(":ner-kw") for f in fields.keys()
+    )
+
+
+def _exclude_processed_docs_query() -> dict:
+    return {
+        "bool": {
+            "must_not": [
+                {"exists": {"field": "person:ner-kw"}},
+                {"exists": {"field": "orgnanization:ner-kw"}},
+                {"exists": {"field": "location:ner-kw"}},
+                {"exists": {"field": "miscellaneous:ner-kw"}},
+            ]
+        }
+    }
 
 
 def annotate_entities(documents, field_name, tagger, es_client, index, language_code, output_dir):
