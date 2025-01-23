@@ -45,12 +45,31 @@ ner_models = {
     'nl': dutch_tagger(),
 }
 
+
 @click.command()
-@click.option('-i', '--index', help="Elasticsearch index name from which to request the training data", required=True)
+@click.option(
+    '-i',
+    '--index',
+    help="Elasticsearch index name from which to request the training data",
+    required=True,
+)
 @click.option('-f', '--field_name', help="The index field to process", default='text')
-@click.option('-l', '--language_code', help='the language code of the field', default='en')
-@click.option('-o', '--output_dir', help="The directory to which to write the data of discovered entities", default='data')
-def process_documents(index, field_name, language_code, output_dir):
+@click.option(
+    '-l', '--language_code', help='the language code of the field', default='en'
+)
+@click.option(
+    '-o',
+    '--output_dir',
+    help="The directory to which to write the data of discovered entities",
+    default='data',
+)
+@click.option(
+    '-s',
+    '--size',
+    help="The batch size (how many documents are processed at a time)",
+    default=100,
+)
+def process_documents(index, field_name, language_code, output_dir, size):
     es = es_client()
     if not (_mapping_has_ner_fields(es, index)):
         add_annotated_field(es, index, field_name)
@@ -58,7 +77,7 @@ def process_documents(index, field_name, language_code, output_dir):
     initial_search = es.search(
         index=index,
         query=_exclude_processed_docs_query(),
-        size=100,
+        size=size,
         scroll="30m",
         track_total_hits=True,
     )
