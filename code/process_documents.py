@@ -5,7 +5,7 @@ import pickle
 import re
 import string
 
-from elasticsearch import BadRequestError
+from elasticsearch import Elasticsearch, BadRequestError
 from flair.data import Sentence
 from flair.models import SequenceTagger
 from flair.embeddings import TransformerWordEmbeddings
@@ -17,6 +17,12 @@ from es_client import es_client
 logger = logging.getLogger(__name__)
 pattern = re.compile(r'\W')
 
+filter_field_mappings = {
+    'PER': 'person:ner-kw',
+    'LOC': 'location:ner-kw',
+    'ORG': 'organization:ner-kw',
+    'MISC': 'miscellaneous:ner-kw',
+}
 
 def dutch_tagger():
     ''' The Dutch tokenizer was retrained after the Dutch NER model
@@ -39,17 +45,41 @@ ner_models = {
     'nl': dutch_tagger(),
 }
 
+
 @click.command()
-@click.option('-i', '--index', help="Elasticsearch index name from which to request the training data", required=True)
+@click.option(
+    '-i',
+    '--index',
+    help="Elasticsearch index name from which to request the training data",
+    required=True,
+)
 @click.option('-f', '--field_name', help="The index field to process", default='text')
-@click.option('-l', '--language_code', help='the language code of the field', default='en')
-@click.option('-o', '--output_dir', help="The directory to which to write the data of discovered entities", default='data')
-def process_documents(index, field_name, language_code, output_dir):
+@click.option(
+    '-l', '--language_code', help='the language code of the field', default='en'
+)
+@click.option(
+    '-o',
+    '--output_dir',
+    help="The directory to which to write the data of discovered entities",
+    default='data',
+)
+@click.option(
+    '-s',
+    '--size',
+    help="The batch size (how many documents are processed at a time)",
+    default=100,
+)
+def process_documents(index, field_name, language_code, output_dir, size):
     es = es_client()
-    add_annotated_field(es, index, field_name)
-    add_filter_fields(es, index)
+    if not (_mapping_has_ner_fields(es, index)):
+        add_annotated_field(es, index, field_name)
+        add_filter_fields(es, index)
     initial_search = es.search(
-        index=index, size=100, scroll="30m", track_total_hits=True
+        index=index,
+        query=_exclude_processed_docs_query(),
+        size=size,
+        scroll="30m",
+        track_total_hits=True,
     )
     if not initial_search:
         es.clear_scroll(scroll_id='_all')
@@ -68,25 +98,56 @@ def process_documents(index, field_name, language_code, output_dir):
     es.clear_scroll(scroll_id="_all")
 
 
+def _mapping_has_ner_fields(es_client: Elasticsearch, index: str) -> bool:
+    mapping = es_client.indices.get_mapping(index=index)
+    fields = mapping[index]['mappings']['properties']
+    return any(f.endswith(":ner") for f in fields.keys()) and any(
+        f.endswith(":ner-kw") for f in fields.keys()
+    )
+
+
+def _exclude_processed_docs_query() -> dict:
+    return {
+        "bool": {
+            "must_not": [
+                {"exists": {"field": "person:ner-kw"}},
+                {"exists": {"field": "orgnanization:ner-kw"}},
+                {"exists": {"field": "location:ner-kw"}},
+                {"exists": {"field": "miscellaneous:ner-kw"}},
+            ]
+        }
+    }
+
+
 def annotate_entities(documents, field_name, tagger, es_client, index, language_code, output_dir):
-    for doc in documents:
-        output = ''
-        entities = []
-        document = Sentence(doc['_source'][field_name], use_tokenizer=False, language_code=language_code)
+    for es_doc in documents:
+        parsed_document = Sentence(
+            es_doc['_source'][field_name],
+            use_tokenizer=False,
+            language_code=language_code,
+        )
+        document_id = es_doc['_id']
         try:
-            tagger.predict(document)
-            output = parse_prediction(document, output, entities)
-        except:
+            tagger.predict(parsed_document)
+            output, entities = parse_prediction(parsed_document)
+        except Exception as e:
             logger.warning(
-                'Failed to parse document with following id: {}'.format(doc['_id']))
-        save_entity_labels(entities, index, doc['_id'], output_dir)
-        es_client.update(index=index, id=doc['_id'], doc={
-            annotated_field_name(field_name): output,
-            **create_filter_content(entities)
-        })
+                f'Failed to parse document with following id: {document_id}, error: {e}'
+            )
+        save_entity_labels(entities, index, document_id, output_dir)
+        es_client.update(
+            index=index,
+            id=document_id,
+            doc={
+                annotated_field_name(field_name): output,
+                **create_filter_content(entities),
+            },
+        )
 
 
-def parse_prediction(sentence, output, entities):
+def parse_prediction(sentence):
+    output = ''
+    entities = []
     predicted = sentence.to_dict()
     entities.extend(predicted['entities'])
     tokens = predicted['tokens']
@@ -104,15 +165,15 @@ def parse_prediction(sentence, output, entities):
                 output += add_closing_tag(entity)
         else:
             output += whitespace + token['text']
-    return output
+    return output, entities
 
 
 def create_filter_content(entities) -> dict:
-    document_fields = {key: [] for key in filter_field_mappings().values()}
+    document_fields = {key: [] for key in filter_field_mappings.values()}
     for ent in entities:
-        for field in filter_field_mappings().keys():
+        for field in filter_field_mappings.keys():
             if field in [label['value'] for label in ent['labels']]:
-                field_name = filter_field_mappings()[field]
+                field_name = filter_field_mappings[field]
                 value = document_fields[field_name]
                 # add value to keyword field, stripping non-alphanumeric characters
                 value.append(pattern.sub('', ent['text']))
@@ -145,31 +206,21 @@ def add_annotated_field(es_client, index_name, field_name):
         es_client.indices.put_mapping(
             index=index_name,
             properties={
-                    annotated_field_name(field_name): {
-                        'type': 'annotated_text'
-                    }
-                }
+                annotated_field_name(field_name): {'type': 'text', 'index': False}
+            },
         )
     except BadRequestError:
         raise
-
-
-def filter_field_mappings():
-    return {
-        'PER': 'ner:person',
-        'LOC': 'ner:location',
-        'ORG': 'ner:organization',
-        'MISC': 'ner:miscellaneous'
-    }
 
 
 def add_filter_fields(es_client, index_name):
     try:
         es_client.indices.put_mapping(
             index=index_name,
-            properties={field_name: {'type': 'keyword'}
-                        for field_name in filter_field_mappings().values()
-                        }
+            properties={
+                field_name: {'type': 'keyword'}
+                for field_name in filter_field_mappings.values()
+            },
         )
     except BadRequestError:
         raise
