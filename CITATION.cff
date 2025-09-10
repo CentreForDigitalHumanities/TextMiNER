@@ -1,0 +1,34 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: TextMiNER
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - name: >-
+      Research Software Lab, Centre for Digital Humanities,
+      Utrecht University
+    website: >-
+      https://cdh.uu.nl/centre-for-digital-humanities/research-software-lab/
+    city: Utrecht
+    country: NL
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.17091567
+repository-code: 'https://github.com/CentreForDigitalHumanities/TextMiNER'
+abstract: >
+  A script to detect named entities and store them in an
+  Elasticsearch annotated_text field
+keywords:
+  - text-mining
+  - I-analyzer
+  - spacy
+  - elasticsearch
+  - natural language processing
+license: MIT
+commit: 078a9e86a60142ca0136bbd5df1ff870fdab0129
+version: 0.0.1
+date-released: '2025-09-10'
