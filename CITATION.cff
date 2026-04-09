@@ -24,7 +24,7 @@ abstract: >
   Elasticsearch annotated_text field
 keywords:
   - text-mining
-  - I-analyzer
+  - Textcavator
   - spacy
   - elasticsearch
   - natural language processing
